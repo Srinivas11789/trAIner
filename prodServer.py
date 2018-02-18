@@ -6,7 +6,7 @@ import threading
 import math
 
 # Global dictionary data
-latest_data = {"score":"","comments":"","rep_count":"","time":""}
+latest_data = {}
 data = {}
 session = 1
 terminate_flag = 1
@@ -58,50 +58,55 @@ def fetchData():
                         if "backCurvature" not in data[session]:
                         	data[session]["backCurvature"] = []
            		if str(content[0]) == "a": # Angle of LeftKnee
-                        newData = int(ord(content[1])*1.4117)
+                                newData = int(ord(content[1])*1.4117)
               			data[session]["leftAngleKnee"].append(newData)
-                        check_squat(newData)
+                                check_squat(newData)
            		if str(content[0]) == "b": # Angle of RightKnee
-                        newData = int(ord(content[1])*1.4117)
+                                newData = int(ord(content[1])*1.4117)
               			data[session]["rightAngleKnee"].append(newData)
-                        check_squat(newData)
-                if str(content[0]) == "c": # Angle of LeftArm
-                        newData = int(ord(content[1])*1.4117)
-                        data[session]["leftAngleElbow"].append(newData)
-                        check_pushup(newData)
-                if str(content[0]) == "d": # Angle of RightArm
-                        newData = int(ord(content[1])*1.4117)
-                        data[session]["rightAngleElbow"].append(newData)
-                        check_pushup(newData)
+                                check_squat(newData)
+                        if str(content[0]) == "c": # Angle of LeftArm
+                                newData = int(ord(content[1])*1.4117)
+                                data[session]["leftAngleElbow"].append(newData)
+                                check_pushup(newData)
+                        if str(content[0]) == "d": # Angle of RightArm
+                                newData = int(ord(content[1])*1.4117)
+                                data[session]["rightAngleElbow"].append(newData)
+                                check_pushup(newData)
            		if str(content[0]) == "e": # Curvature of Back
               			data[session]["backCurvature"].append(ord(content[1])/255.0)
        			pool_sema.release()
 
 def check_pushup(angle):
+    global pushup_is_started,num_pushups
     if (pushup_is_started):
         if (angle >= 90):
             pushup_is_started = False
             num_pushups = num_pushups + 1
     else:
-        if (angle <= 160):
+        if (angle <= 20):
             pushup_is_started = True
 
 def check_squat(angle):
+    global squat_is_started, num_squats
+    print("got angle for squat: " + str(angle))
     if (squat_is_started):
-        if (angle >= 90):
+        if (angle >= 120):
             squat_is_started = False
             num_squats = num_squats + 1
     else:
-        if (angle <= 160):
+        if (angle <= 20):
             squat_is_started = True
 
 def current_reps():
+    global is_squat_session, is_pushup_session, num_pushups, num_squats
     if (is_squat_session):
         return num_squats
     elif (is_pushup_session):
         return num_pushups
 
 def startSession(session_type):
+    global num_squats, is_squat_session, is_pushup_sesssion, num_pushups
     if (session_type == "squat"):
         num_squats = 0
         is_squat_session = True
@@ -135,41 +140,44 @@ class formFixApp(object):
 
     @cherrypy.expose
     def getData(self):
-       global  session_time,latest_data
-       latest_data["session_clock"] = math.floor(((datetime.datetime.now() - session_time).seconds)/3600)
-       latest_data["rep_count"] = current_reps()
-       latest_data["score"] = ""
-       latest_data["comments"] = "" #comments_builder()
-       return json.dumps(latest_data)
+       global  session_time,latest_data, session, sessiontype
+       timedelta = math.floor(((datetime.datetime.now() - session_time).total_seconds())/3600)
+       latest_data[session]["session_clock"] = timedelta
+       latest_data[session]["rep_count"] = current_reps()
+       latest_data[session]["type"] = sessiontype
+       #try:
+       #    latest_data[session]["minimum_angle"] = {"rightAngleElbow": min(data[session]["rightAngleElbow"]), "leftAngleElbow":min(data[session]["leftAngleElbow"]), "rightAngleKnee":data[session]["rightAngleKnee"],"leftAngleKnee":data[session]["leftAngleKnee"], "backCurvature":data[session]["backCurvature"]}
+       #except:
+       #     latest_data[session]["minimum_angle"] = {}   
+       return json.dumps(latest_data[session])
 
     @cherrypy.expose
     def sessionCreate(self, sType):
-                global data, session, terminate_flag, sessiontype, session_time
-                try:
-                  startSession(sType) # type = "pushup" or "squat"
-                  data[session] = {}
-                  terminate_flag = 0
-                  data[session] = {}
-                  sessiontype = sType
-                  session_time = datetime.datetime.now()
-                except:
-                  pass
+                global data, session, terminate_flag, sessiontype, session_time, latest_data
+                if terminate_flag == 1:
+                	startSession(sType) # type = "pushup" or "squat"z
+                	terminate_flag = 0
+                	data[session] = {}
+                	latest_data[session] = {}
+                	sessiontype = sType
+                	session_time = datetime.datetime.now()
+                	return json.dumps({"status": "Session opened","type":sType,"session": session})
+                else:
+                        return json.dumps({"status": "Session already opened","type":sessiontype,"session": session})
 
     @cherrypy.expose
     def sessionClose(self):
-                global data, session, terminate_flag
+                global data, session, terminate_flag, num_squat, num_pushups
                 terminate_flag = 1
-                print data
                 session += 1
+                num_squats = 0
+                num_pushups = 0
        		return json.dumps({"status": "Session closed"})
 
     @cherrypy.expose
     def getAllData(self):
-                global data, session, terminate_flag
-                terminate_flag = 1
-                print data
-                session += 1
-                return json.dumps({"status": "Session closed"})
+                global latest_data
+                return json.dumps(latest_data)
 
     @cherrypy.expose
     def getbackcurvature(self):
