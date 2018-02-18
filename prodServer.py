@@ -3,6 +3,7 @@ import json
 import cherrypy
 import datetime
 import threading
+import math
 
 # Global dictionary data
 latest_data = {"score":"","comments":"","rep_count":"","time":""}
@@ -68,34 +69,47 @@ def fetchData():
 def rep_count():
     rep_count = 0
     global data, latest_data, pool_sema, session_type, session
+    data[session]["leftAngleElbow"] = ["100", "45", "90", "30", "30","45","150", "2","30","100"]
     if session_type == "pushup":
     	push_up = 0
    	push_down = 0
-        pool_sema.acquire()
-    	for angle in data[session]["leftAngleElbow"]:
-            if angle >= 90:
-               push_up = 1
-            for ang in range(data[session]["leftAngleElbow"].index(angle),len(data[session]["leftAngleElbow"])):
-               if ang < 45:
+        try:
+          pool_sema.acquire()
+    	  for angle in data[session]["leftAngleElbow"]:
+            if int(angle) >= 90:
+             for ang in range(data[session]["leftAngleElbow"].index(angle),len(data[session]["leftAngleElbow"])):
+               if int(data[session]["leftAngleElbow"][ang]) <= 45:
                     push_down = 1
+                    for a in range(data[session]["leftAngleElbow"].index(data[session]["leftAngleElbow"][ang]),len(data[session]["leftAngleElbow"])):
+            	        if int(data[session]["leftAngleElbow"][a]) >= 90:
+               		    push_up = 1
+                        break
                break
             if push_up == 1 and push_down == 1:
 	            rep_count += 1
-    	pool_sema.release()
+    	  pool_sema.release()
+        except Exception as e:
+               print e.message
     if session_type == "squat":
         squat_up = 0
         squat_down = 0
-        pool_sema.acquire()
-        for angle in data[session]["leftAngleKnee"]:
-            if angle >= 160:
-               squat_up = 1
-            for ang in range(data[session]["leftAngleKnee"].index(angle),len(data[session]["leftAngleKnee"])):
-               if ang <= 90:
+        try:
+          pool_sema.acquire()
+          for angle in data[session]["leftAngleKnee"]:
+            if int(angle) >= 90:
+             for ang in range(data[session]["leftAngleKnee"].index(angle),len(data[session]["leftAngleKnee"])):
+               if int(data[session]["leftAngleKnee"][ang]) <= 45:
                     squat_down = 1
+                    for a in range(data[session]["leftAngleKnee"].index(ang),len(data[session]["leftAngleKnee"])):
+                        if int(data[session]["leftAngleKnee"][a]) >= 90:
+                           squat_up = 1
+                        break
                break
             if squat_up == 1 and squat_down == 1:
                     rep_count += 1
-        pool_sema.release()
+          pool_sema.release()
+        except:
+          pass
     return rep_count
 
 def comments_builder(score):
@@ -122,11 +136,11 @@ class formFixApp(object):
 
     @cherrypy.expose
     def getData(self):
-       global sessiontype, session_time,latest_data
-       latest_data["session_clock"] = datetime.datetime.now() - session_time
-       latest["rep_count"] = rep_count(type)
-       latest["score"] = score_maker()
-       latest["comment"] = comment_builder()
+       global  session_time,latest_data
+       latest_data["session_clock"] = math.floor(((datetime.datetime.now() - session_time).seconds)/3600) 
+       latest_data["rep_count"] = rep_count()
+       latest_data["score"] = ""
+       latest_data["comments"] = "" #comments_builder()
        return json.dumps(latest_data)
 
     @cherrypy.expose
@@ -148,6 +162,23 @@ class formFixApp(object):
                 print data
                 session += 1
        		return json.dumps({"status": "Session closed"})
+
+    @cherrypy.expose
+    def getAllData(self):
+                global data, session, terminate_flag
+                terminate_flag = 1
+                print data
+                session += 1
+                return json.dumps({"status": "Session closed"})
+
+    @cherrypy.expose
+    def getbackcurvature(self):
+                global data, session
+                if "backCurvature" in data[session]:
+                        length = len(data[session]["backCurvature"])
+                	return json.dumps({"backCurvature":data[session]["backCurvature"][length-1]})
+                else:
+                        return json.dumps({"backCurvature":""})
 
 if __name__ == '__main__':
     cherrypy.server.socket_host = '0.0.0.0'
