@@ -52,16 +52,16 @@ def fetchData():
                                 data[session]["rightAngleElbow"] = []
                         if "backCurvature" not in data[session]:
                         	data[session]["backCurvature"] = []
-           		if str(content[:1]) == "a": # Angle of LeftKnee
-              			data[session]["leftAngleKnee"].append(content[1:])
-           		if str(content[:1]) == "b": # Angle of RightKnee
-              			data[session]["rightAngleKnee"].append(content[1:])
-                        if str(content[:1]) == "c": # Angle of LeftArm
-                                data[session]["leftAngleElbow"].append(content[1:])
-                        if str(content[:1]) == "d": # Angle of RightArm
-                                data[session]["rightAngleElbow"].append(content[1:])
-           		if str(content[:1]) == "e": # Curvature of Back
-              			data[session]["backCurvature"].append(content[1:])
+           		if str(content[0]) == "a": # Angle of LeftKnee
+              			data[session]["leftAngleKnee"].append(int(ord(content[1])*1.4117))
+           		if str(content[0]) == "b": # Angle of RightKnee
+              			data[session]["rightAngleKnee"].append(int(ord(content[1])*1.4117))
+                        if str(content[0]) == "c": # Angle of LeftArm
+                                data[session]["leftAngleElbow"].append(int(ord(content[1])*1.4117))
+                        if str(content[0]) == "d": # Angle of RightArm
+                                data[session]["rightAngleElbow"].append(int(ord(content[1])*1.4117))
+           		if str(content[0]) == "e": # Curvature of Back
+              			data[session]["backCurvature"].append(ord(content[1])/255.0)
        			pool_sema.release()
 
 
@@ -96,7 +96,7 @@ def rep_count():
             if squat_up == 1 and squat_down == 1:
                     rep_count += 1
         pool_sema.release()
-    return rep_count  
+    return rep_count
 
 def comments_builder(score):
     comments = ["Straight your back posture","Maintain pace", "Improper posture","Perfect posture", "Keep going"]
@@ -106,7 +106,7 @@ def comments_builder(score):
        return [comments[0], comments[4]]
     if float(score) < 0.5:
        return [comments[2]]
-    
+
 #Update new Data
 def latestData():
     global data, latest_data, pool_sema
@@ -119,7 +119,7 @@ def latestData():
     threading.Timer(1.0, latestData).start()
 
 class formFixApp(object):
- 
+
     @cherrypy.expose
     def getData(self):
        global sessiontype, session_time,latest_data
@@ -128,7 +128,7 @@ class formFixApp(object):
        latest["score"] = score_maker()
        latest["comment"] = comment_builder()
        return json.dumps(latest_data)
-    
+
     @cherrypy.expose
     def sessionCreate(self, type):
                 global data, session, terminate_flag, sessiontype, session_time
@@ -140,7 +140,7 @@ class formFixApp(object):
                   session_time = datetime.datetime.now()
                 except:
                   pass
-    
+
     @cherrypy.expose
     def sessionClose(self):
                 global data, session, terminate_flag
@@ -153,4 +153,3 @@ if __name__ == '__main__':
     cherrypy.server.socket_host = '0.0.0.0'
     threading.Thread(target=fetchData, args=()).start()
     cherrypy.quickstart(formFixApp())
-
