@@ -12,6 +12,10 @@ session = 1
 terminate_flag = 1
 session_type = "pushup"
 session_time = 0
+pushup_is_started = 1 # reset when session starts
+squat_is_started = 1 # reset when session starts
+num_pushups = 0 # reset when session starts
+num_squats = 0 # reset when session starts
 
 # Semaphore logic
 maxconnections = 10
@@ -54,66 +58,61 @@ def fetchData():
                         if "backCurvature" not in data[session]:
                         	data[session]["backCurvature"] = []
            		if str(content[0]) == "a": # Angle of LeftKnee
-              			data[session]["leftAngleKnee"].append(int(ord(content[1])*1.4117))
+                        newData = int(ord(content[1])*1.4117)
+              			data[session]["leftAngleKnee"].append(newData)
+                        check_squat(newData)
            		if str(content[0]) == "b": # Angle of RightKnee
-              			data[session]["rightAngleKnee"].append(int(ord(content[1])*1.4117))
-                        if str(content[0]) == "c": # Angle of LeftArm
-                                data[session]["leftAngleElbow"].append(int(ord(content[1])*1.4117))
-                        if str(content[0]) == "d": # Angle of RightArm
-                                data[session]["rightAngleElbow"].append(int(ord(content[1])*1.4117))
+                        newData = int(ord(content[1])*1.4117)
+              			data[session]["rightAngleKnee"].append(newData)
+                        check_squat(newData)
+                if str(content[0]) == "c": # Angle of LeftArm
+                        newData = int(ord(content[1])*1.4117)
+                        data[session]["leftAngleElbow"].append(newData)
+                        check_pushup(newData)
+                if str(content[0]) == "d": # Angle of RightArm
+                        newData = int(ord(content[1])*1.4117)
+                        data[session]["rightAngleElbow"].append(newData)
+                        check_pushup(newData)
            		if str(content[0]) == "e": # Curvature of Back
               			data[session]["backCurvature"].append(ord(content[1])/255.0)
        			pool_sema.release()
 
+def check_pushup(angle):
+    if (pushup_is_started):
+        if (angle >= 90):
+            pushup_is_started = False
+            num_pushups = num_pushups + 1
+    else:
+        if (angle <= 160):
+            pushup_is_started = True
 
-def rep_count():
-    rep_count = 0
-    global data, latest_data, pool_sema, session_type, session
-    data[session]["leftAngleElbow"] = ["100", "45", "90", "30", "30","45","150", "2","30","100"]
-    if session_type == "pushup":
-    	push_up = 0
-   	push_down = 0
-        try:
-          pool_sema.acquire()
-    	  for angle in data[session]["leftAngleElbow"]:
-            if int(angle) >= 90:
-             for ang in range(data[session]["leftAngleElbow"].index(angle),len(data[session]["leftAngleElbow"])):
-               if int(data[session]["leftAngleElbow"][ang]) <= 45:
-                    push_down = 1
-                    for a in range(data[session]["leftAngleElbow"].index(data[session]["leftAngleElbow"][ang]),len(data[session]["leftAngleElbow"])):
-            	        if int(data[session]["leftAngleElbow"][a]) >= 90:
-               		    push_up = 1
-                        break
-               break
-            if push_up == 1 and push_down == 1:
-	            rep_count += 1
-    	  pool_sema.release()
-        except Exception as e:
-               print e.message
-    if session_type == "squat":
-        squat_up = 0
-        squat_down = 0
-        try:
-          pool_sema.acquire()
-          for angle in data[session]["leftAngleKnee"]:
-            if int(angle) >= 90:
-             for ang in range(data[session]["leftAngleKnee"].index(angle),len(data[session]["leftAngleKnee"])):
-               if int(data[session]["leftAngleKnee"][ang]) <= 45:
-                    squat_down = 1
-                    for a in range(data[session]["leftAngleKnee"].index(ang),len(data[session]["leftAngleKnee"])):
-                        if int(data[session]["leftAngleKnee"][a]) >= 90:
-                           squat_up = 1
-                        break
-               break
-            if squat_up == 1 and squat_down == 1:
-                    rep_count += 1
-          pool_sema.release()
-        except:
-          pass
-    return rep_count
+def check_squat(angle):
+    if (squat_is_started):
+        if (angle >= 90):
+            squat_is_started = False
+            num_squats = num_squats + 1
+    else:
+        if (angle <= 160):
+            squat_is_started = True
+
+def current_reps():
+    if (is_squat_session):
+        return num_squats
+    elif (is_pushup_session):
+        return num_pushups
+
+def startSession(session_type):
+    if (session_type == "squat"):
+        num_squats = 0
+        is_squat_session = True
+        is_pushup_sesssion = False
+    elif (session_type == "pushup"):
+        num_pushups = 0
+        is_pushup_session = True
+        is_squat_session = False
 
 def comments_builder(score):
-    comments = ["Straight your back posture","Maintain pace", "Improper posture","Perfect posture", "Keep going"]
+    comments = ["Straighten your back posture","Maintain pace", "Improper posture","Perfect posture", "Keep going"]
     if float(score) > 0.85:
        return [comments[4], comments[3],comments[1]]
     if float(score) < 0.85 and float(score) > 0.5:
@@ -137,20 +136,21 @@ class formFixApp(object):
     @cherrypy.expose
     def getData(self):
        global  session_time,latest_data
-       latest_data["session_clock"] = math.floor(((datetime.datetime.now() - session_time).seconds)/3600) 
-       latest_data["rep_count"] = rep_count()
+       latest_data["session_clock"] = math.floor(((datetime.datetime.now() - session_time).seconds)/3600)
+       latest_data["rep_count"] = current_reps()
        latest_data["score"] = ""
        latest_data["comments"] = "" #comments_builder()
        return json.dumps(latest_data)
 
     @cherrypy.expose
-    def sessionCreate(self, type):
+    def sessionCreate(self, sType):
                 global data, session, terminate_flag, sessiontype, session_time
                 try:
+                  startSession(sType) # type = "pushup" or "squat"
                   data[session] = {}
                   terminate_flag = 0
                   data[session] = {}
-                  sessiontype = type
+                  sessiontype = sType
                   session_time = datetime.datetime.now()
                 except:
                   pass
